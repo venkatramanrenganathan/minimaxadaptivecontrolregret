@@ -1,50 +1,71 @@
-function [Kmatrix, Fmatrix, gamma] = HinfDynamicGame(statespace, Q, R)
+function [Kmatrix, Fmatrix, gamma] = HinfDynamicGame(A, B, Q, R, gamma, gammaOptFlag)
 % HinfDynamicGame solves the H-infinity Optimal Control via Dynamic Games
-% given the state space system and the penalty matrices - Q, R.
+% given the state space matrices A, B and the penalty matrices - Q, R.
 
-
-A = statespace.A;
-B = statespace.B;
-C = statespace.C;
-D = statespace.D;
-
+% Infer the dimensions
 n = size(A, 1);
 m = size(B, 2);
-T = 1000;
-invR = inv(R);
-gamma = 50;
 
+if(gammaOptFlag == 1)
+    % Compute the bisection gamma and control gains
+    % Initialize a starting disturbance attenuation level
+    gamma = 100;
 
-% Define UB and LB used in the bisection.  UB will always be the largest
-% feasible value of gamma. 
-UB = gamma;
-LB = 0;
-tol = 1e-8;
-gammaFail = 0;
+    % Define UB and LB used in the bisection.  
+    UB = gamma;
+    LB = 0;
 
-% Solve the infinite horizon H_infty Dynamic Game
-while (UB - LB >= tol)
-    
-    % bisect
-    gamma = (UB+LB)/2;
-    
-    Rext = [R, zeros(m, n); zeros(n, m), -gamma^2*eye(n)];
-    Bext = [B, eye(n)];
-    [P, K, ~] = idare(A, Bext, Q, Rext, [],[]);
-    
-    % 
-    if isequal(K, [])
-        UB = gamma;
-    else
-        LB = gamma;
+    % Set the tolerance for bisection to converge
+    tol = 1e-8;
+
+    % Solve the infinite horizon H_infty Dynamic Game
+    while (UB - LB >= tol)
+
+        % Bisect the gamma
+        gamma = (UB+LB)/2;
+
+        % Augmented Input penalty matrix for both u and w players
+        Rext = [R, zeros(m, n); zeros(n, m), -gamma^2*eye(n)];
+
+        % Augmented Inout matrix
+        Bext = [B, eye(n)];
+
+        % Solve the Hinfinity Riccatti
+        [P, K, ~] = idare(A, Bext, Q, Rext, [],[]);
+
+        % Set the upper and lower limits for bisection
+        if isequal(K, [])
+            disp('K is Empty');
+            UB = gamma;
+        else
+            disp('K is not Empty');
+            LB = gamma;
+        end
     end
+    
+
+else
+    % Just compute the gains for the given gamma
+    % Augmented Input penalty matrix for both u and w players
+    Rext = [R, zeros(m, n); zeros(n, m), -gamma^2*eye(n)];
+
+    % Augmented Inout matrix
+    Bext = [B, eye(n)];
+
+    % Solve the Hinfinity Riccatti
+    [P, K, ~] = idare(A, Bext, Q, Rext, [],[]);    
 end
 
 
+% Extract the feedback gains for u and w players from the converged gamma
 Kmatrix = -inv(R + B'*P*B + B'*P*inv(gamma^2*eye(n) - P)*P*B)*(B'*P*A + B'*P*inv(gamma^2*eye(n) - P)*P*A);
-Fmatrix = inv(P - gamma^2*eye(n) - P*B*inv(R+B'*P*B)*B'*P)*(P*A - P*B*inv(R+B'*P*B)*B'*P*A);
+Fmatrix = -inv(P - gamma^2*eye(n) - P*B*inv(R+B'*P*B)*B'*P)*(P*A - P*B*inv(R+B'*P*B)*B'*P*A);
+
 
 % % Solve the finite horizon H_infty Dynamic Game
+% T = 1000;
+% invR = inv(R);
+% gammaFail = 0;
 % while (UB - LB >= tol)
 %     
 %     % perform gamma bisection
