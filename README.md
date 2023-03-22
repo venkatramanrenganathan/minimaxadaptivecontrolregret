@@ -15,7 +15,6 @@ This repository contains the MATLAB code for studying the regret of a minimax ad
     * Set `disturbanceSelect = 1` in line `137` for simulations with Hinfinity adversarial disturbance
     * Set `disturbanceSelect = 2` in line `137` for simulations with confusing adversarial disturbance
     * Set `disturbanceSelect = 3` in line `137` for simulations with sinusoidal adversarial disturbance
-    * Set `addrandomFlag = 1` in line `139` for simulations with disturbance with randomness too.
 
 # Contributing Authors
 1. [Venkatraman Renganathan - Lund University](https://github.com/venkatramanrenganathan)
