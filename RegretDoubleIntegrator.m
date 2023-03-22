@@ -154,7 +154,6 @@ end
 % Frequency response parameters
 Ts = 0.01;
 z = tf('z', Ts);
-radpersecToHz = 1/(2*pi);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % %% Simulate the trajectory with the Hinfinity control
