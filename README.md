@@ -12,9 +12,9 @@ This repository contains the MATLAB code for studying the regret of a minimax ad
 1. Run the matlab code `RegretDoubleIntegrator.m` which will load the required system and controller data and generate the desired plots.
 
 ## Variations while running `RegretDoubleIntegrator.m` file
-    * Set `disturbanceSelect = 1` in line `137` for simulations with Hinfinity adversarial disturbance
-    * Set `disturbanceSelect = 2` in line `137` for simulations with confusing adversarial disturbance
-    * Set `disturbanceSelect = 3` in line `137` for simulations with sinusoidal adversarial disturbance
+    * Set `disturbanceSelect = 1` in line `138` for simulations with Hinfinity adversarial disturbance
+    * Set `disturbanceSelect = 2` in line `138` for simulations with confusing adversarial disturbance
+    * Set `disturbanceSelect = 3` in line `138` for simulations with sinusoidal adversarial disturbance
 
 # Contributing Authors
 1. [Venkatraman Renganathan - Lund University](https://github.com/venkatramanrenganathan)
