@@ -35,10 +35,13 @@ set(groot,'defaultAxesTickLabelInterpreter','latex');
 set(groot,'defaulttextinterpreter','latex');
 set(groot,'defaultLegendInterpreter','latex');
 
+% Get current working folder info
+currentFolder = pwd;
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-T = 20;     % Set time horizon
+T = 30;     % Set time horizon
 tvec = 0:T; % A vector of times till time horizon 
 
 % Define system parameters of double integrator
@@ -135,7 +138,7 @@ disp('Finished Computing H_infinity Control Gains');
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Select the disturbance type: 1: adverse, 2: confuse, 3: sine
-disturbanceSelect = 1;   
+disturbanceSelect = 3;   
 
 % Define Placeholders for states and inputs for MAC & H_inf policies
 x_minmax  = zeros(n, T+1);             % States of MAC
@@ -176,11 +179,9 @@ for i = 1:numModels
             w_advers(:,t-1,i) = Fi*x_hinfty(:,t-1,i); 
         elseif(disturbanceSelect == 2)
             % Generate confusing adversarial disturbance
-            modelsCombination = ones(numModels,1);
-            if(mod(t,2)==0)
-                modelsCombination(i) = -1;             
-            end
-            % modelsCombination(i) = -1; % Subtract contribution of i^th model            
+            modelsCombination = 1*rand(numModels,1);
+            % Subtract contribution of i^th model  
+            modelsCombination(i) = -1;             
             for j = 1:numModels
                 w_advers(:,t-1,i) = w_advers(:,t-1,i) + modelsCombination(j)*(AMatrices{j}*x_hinfty(:,t-1,i) + BMatrices{j}*u_hinfty(:,t-1,i));
             end
@@ -189,7 +190,7 @@ for i = 1:numModels
             T_d_to_z_i = [eye(n); Ki]*inv(z*eye(n) - (Ai + Bi*Ki));
             % Find the frequency where worst gain occurs
             [gpeaki, fpeaki] = getPeakGain(T_d_to_z_i);
-            % Evaluate the transfer function at the frequency
+            % Evaluate the transfer function at the peak frequency
             sysi_at_fmax = evalfr(T_d_to_z_i, exp(j*fpeaki*Ts));
             % Perform a Singular value decomposition
             [Ui, Si, Vi] = svd(sysi_at_fmax);
@@ -235,13 +236,13 @@ for t = 2:T+1
     if(zplus <= zminus)
         % (A, B) fits disturbance model well
         modelSelected = 1;
-        Ki = MAC_KMatrices{1};
+        Ki = -MAC_KMatrices{1};
         disp('Controller selects model 1 as the best fit for disturbance trajectory');
         u_minmax(:,t-1) = -MAC_KMatrices{1}*x_minmax(:,t-1); 
     else
         % (A, -B) fits disturbance model well
         modelSelected = 2;
-        Ki = MAC_KMatrices{2};
+        Ki = -MAC_KMatrices{2};
         disp('Controller selects model 2 as the best fit for disturbance trajectory');
         u_minmax(:,t-1) = -MAC_KMatrices{2}*x_minmax(:,t-1); 
     end     
@@ -252,19 +253,18 @@ for t = 2:T+1
         w_minimax(:,t-1) = Fi*x_minmax(:,t-1); 
     elseif(disturbanceSelect == 2)
         % Generate Confusing disturbance
-        modelsCombination = ones(numModels,1);
-        if(mod(t,2)==0)
-            modelsCombination(modelNum) = -1; % Subtract the contribution of original        
-        end
+        modelsCombination = 1*rand(numModels,1);
+        % Subtract the contribution of original 
+        modelsCombination(modelNum) = -1;        
         for i = 1:numModels
             w_minimax(:,t-1) = w_minimax(:,t-1) + modelsCombination(i)*(AMatrices{i}*x_minmax(:,t-1) + BMatrices{i}*u_minmax(:,t-1));
         end
     elseif(disturbanceSelect == 3)
         % Find the transfer function from disturbance to [x,u]
-        T_d_to_z_minimax = [eye(n); Ki]*inv(z*eye(n) - (A + B*Ki));
+        T_d_to_z_minimax = [eye(n); Ki]*inv(z*eye(n) - (A + sgn*B*Ki));
         % Find the frequency where worst gain occurs
         [gpeak_minmax, fpeak_minmax] = getPeakGain(T_d_to_z_minimax);
-        % Evaluate the transfer function at the frequency
+        % Evaluate the transfer function at the peak frequency
         sys_minmax_at_fmax = evalfr(T_d_to_z_minimax, exp(j*fpeak_minmax*Ts));
         % Perform a Singular value decomposition
         [U_minmax, S_minmax, V_minmax] = svd(sys_minmax_at_fmax);
@@ -297,36 +297,64 @@ a = findobj(gcf, 'type', 'axes');
 h = findobj(gcf, 'type', 'line');
 set(h, 'linewidth', 4);
 set(a, 'linewidth', 4);
-set(a, 'FontSize', 40);
+set(a, 'FontSize', 50);
+if(disturbanceSelect == 1)
+    saveas(figure(figNum), [currentFolder '/CDC_2023_Figures/MACAdverseWStates.png']);
+elseif(disturbanceSelect == 2)
+    saveas(figure(figNum), [currentFolder '/CDC_2023_Figures/MACConfuseWStates.png']);
+elseif(disturbanceSelect == 3)
+    saveas(figure(figNum), [currentFolder '/CDC_2023_Figures/MACSinusoidWStates.png']);
+end
 
 %% Plot the Hinfty trajectories vs time
 figNum = figNum + 1;
 figure(figNum);
-plot(tvec, x_hinfty(:,:,2)');
+plot(tvec, x_hinfty(:,:,modelNum)');
 hold on;
 xlabel('Time');
-ylabel('$x^{\star}_{2}$', 'interpreter', 'latex');
+ylabelText1 = '$x^{\star}_{';
+ylabelText2 = num2str(modelNum);
+ylabelText3 = '}$'; 
+ylabelText = strcat(ylabelText1, strcat(ylabelText2, ylabelText3)); 
+ylabel(ylabelText, 'interpreter', 'latex');
 hold off;
 a = findobj(gcf, 'type', 'axes');
 h = findobj(gcf, 'type', 'line');
 set(h, 'linewidth', 4);
 set(a, 'linewidth', 4);
-set(a, 'FontSize', 40);
+set(a, 'FontSize', 50);
+if(disturbanceSelect == 1)
+    saveas(figure(figNum), [currentFolder '/CDC_2023_Figures/HinfAdverseWStates.png']);
+elseif(disturbanceSelect == 2)
+    saveas(figure(figNum), [currentFolder '/CDC_2023_Figures/HinfConfuseWStates.png']);
+elseif(disturbanceSelect == 3)
+    saveas(figure(figNum), [currentFolder '/CDC_2023_Figures/HinfSinusoidWStates.png']);
+end
 
 %% Plot the Difference trajectories vs time
 figNum = figNum + 1;
 figure(figNum);
-plot(tvec, (x_minmax(:,:) - x_hinfty(:,:,2))');
+plot(tvec, (x_minmax(:,:) - x_hinfty(:,:,modelNum))');
 hold on;
 xlabel('Time');
-ylabel('$x^{\dagger} - x^{\star}_{2}$', 'interpreter', 'latex');
+ylabelText1 = '$x^{\dagger} - x^{\star}_{';
+ylabelText2 = num2str(modelNum);
+ylabelText3 = '}$'; 
+ylabelText = strcat(ylabelText1, strcat(ylabelText2, ylabelText3)); 
+ylabel(ylabelText, 'interpreter', 'latex');
 hold off;
 a = findobj(gcf, 'type', 'axes');
 h = findobj(gcf, 'type', 'line');
 set(h, 'linewidth', 4);
 set(a, 'linewidth', 4);
-set(a, 'FontSize', 40);
-
+set(a, 'FontSize', 50);
+if(disturbanceSelect == 1)
+    saveas(figure(figNum), [currentFolder '/CDC_2023_Figures/DiffAdverseWStates.png']);
+elseif(disturbanceSelect == 2)
+    saveas(figure(figNum), [currentFolder '/CDC_2023_Figures/DiffConfuseWStates.png']);
+elseif(disturbanceSelect == 3)
+    saveas(figure(figNum), [currentFolder '/CDC_2023_Figures/DiffSinusoidWStates.png']);
+end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Compute the Model-based Regret & the Total Regret
@@ -338,7 +366,8 @@ modelRegrets = zeros(numModels, T+1);
 % Loop through all finite set of linear system models
 for i = 1:numModels   
     % Loop through the entire time horizon
-    for t = 1:T+1
+    for t = 1:T+1     
+        % Initilize all summation to zero  
         minmaxStateSum = 0;
         minmaxInputSum = 0;
         hinftyStateSum = 0;
@@ -370,34 +399,46 @@ fprintf('Total regret: %.3f \n', totalRegret);
 Tvec = 0:T;
 figNum = figNum+1;
 figure(figNum);
-plot(Tvec, modelbasedRegret(2, :), '-ob');
+plot(Tvec, modelbasedRegret(modelNum, :), '--b');
 xlabel('Time');
-ylabel('$\mathcal{R}(\pi^{\dagger}, \pi^{\star}_{2})$');
+ylabel('$\mathcal{R}(\pi^{\dagger}, \pi^{\star}_{2}, T)$');
 hold off;
 a = findobj(gcf, 'type', 'axes');
 h = findobj(gcf, 'type', 'line');
 set(h, 'linewidth', 4);
 set(a, 'linewidth', 4);
-set(a, 'FontSize', 40);
+set(a, 'FontSize', 50);
+if(disturbanceSelect == 1)
+    saveas(figure(figNum), [currentFolder '/CDC_2023_Figures/RegretAdverseW.png']);
+elseif(disturbanceSelect == 2)
+    saveas(figure(figNum), [currentFolder '/CDC_2023_Figures/RegretConfuseW.png']);
+elseif(disturbanceSelect == 3)
+    saveas(figure(figNum), [currentFolder '/CDC_2023_Figures/RegretSinusoidW.png']);
+end
 
 %% Plot the Hinfty control inputs vs time
 Tvec = 0:T-1;
 figNum = figNum + 1;
 figure(figNum);
-for i = 1:numModels
-    if(i==1)
-        plot(Tvec, u_hinfty(:,:,i), '-ob');
-    else
-        plot(Tvec, u_hinfty(:,:,i), '-or');
-    end
-    xlabel('Time');
-    ylabel('$u^{\star}_{1}, u^{\star}_{2}$');
-    hold on;
-    a = findobj(gcf, 'type', 'axes');
-    h = findobj(gcf, 'type', 'line');
-    set(h, 'linewidth', 4);
-    set(a, 'linewidth', 4);
-    set(a, 'FontSize', 40);
+plot(Tvec, u_hinfty(:,:,modelNum), '-or');
+xlabel('Time');
+ylabelText1 = '$u^{\star}_{';
+ylabelText2 = num2str(modelNum);
+ylabelText3 = '}$'; 
+ylabelText = strcat(ylabelText1, strcat(ylabelText2, ylabelText3)); 
+ylabel(ylabelText, 'interpreter', 'latex');
+hold on;
+a = findobj(gcf, 'type', 'axes');
+h = findobj(gcf, 'type', 'line');
+set(h, 'linewidth', 4);
+set(a, 'linewidth', 4);
+set(a, 'FontSize', 50);
+if(disturbanceSelect == 1)
+    saveas(figure(figNum), [currentFolder '/CDC_2023_Figures/HinfAdverseWControl.png']);
+elseif(disturbanceSelect == 2)
+    saveas(figure(figNum), [currentFolder '/CDC_2023_Figures/HinfConfuseWControl.png']);
+elseif(disturbanceSelect == 3)
+    saveas(figure(figNum), [currentFolder '/CDC_2023_Figures/HinfSinusoidWControl.png']);
 end
 
 %% Plot the Minimax Adaptive control inputs vs time
@@ -412,7 +453,14 @@ a = findobj(gcf, 'type', 'axes');
 h = findobj(gcf, 'type', 'line');
 set(h, 'linewidth', 4);
 set(a, 'linewidth', 4);
-set(a, 'FontSize', 40);
+set(a, 'FontSize', 50);
+if(disturbanceSelect == 1)
+    saveas(figure(figNum), [currentFolder '/CDC_2023_Figures/MACAdverseWControl.png']);
+elseif(disturbanceSelect == 2)
+    saveas(figure(figNum), [currentFolder '/CDC_2023_Figures/MACConfuseWControl.png']);
+elseif(disturbanceSelect == 3)
+    saveas(figure(figNum), [currentFolder '/CDC_2023_Figures/MACSinusoidWControl.png']);
+end
 
 %% Plot the Hinfinity disturbance inputs vs time
 Tvec = 0:T-1;
@@ -431,7 +479,14 @@ for i = 1:numModels
     h = findobj(gcf, 'type', 'line');
     set(h, 'linewidth', 4);
     set(a, 'linewidth', 4);
-    set(a, 'FontSize', 40);
+    set(a, 'FontSize', 50);
+end
+if(disturbanceSelect == 1)
+    saveas(figure(figNum), [currentFolder '/CDC_2023_Figures/HinfAdverseW.png']);
+elseif(disturbanceSelect == 2)
+    saveas(figure(figNum), [currentFolder '/CDC_2023_Figures/HinfConfuseW.png']);
+elseif(disturbanceSelect == 3)
+    saveas(figure(figNum), [currentFolder '/CDC_2023_Figures/HinfSinusoidW.png']);
 end
 
 %% Plot the Minimax disturbance inputs vs time
@@ -446,5 +501,11 @@ a = findobj(gcf, 'type', 'axes');
 h = findobj(gcf, 'type', 'line');
 set(h, 'linewidth', 4);
 set(a, 'linewidth', 4);
-set(a, 'FontSize', 40);
-
+set(a, 'FontSize', 50);
+if(disturbanceSelect == 1)
+    saveas(figure(figNum), [currentFolder '/CDC_2023_Figures/MACAdverseW.png']);
+elseif(disturbanceSelect == 2)
+    saveas(figure(figNum), [currentFolder '/CDC_2023_Figures/MACConfuseW.png']);
+elseif(disturbanceSelect == 3)
+    saveas(figure(figNum), [currentFolder '/CDC_2023_Figures/MACSinusoidW.png']);
+end
