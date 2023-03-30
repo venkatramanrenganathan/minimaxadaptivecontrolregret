@@ -25,7 +25,7 @@ This repository contains the MATLAB code for studying the regret of a minimax ad
    
 ## Intricacies While Simulating Regret
    * When `disturbanceSelect = 1` or `disturbanceSelect = 3` in line `172`, simulate Hinfinity system first and then use the disturbance generated for the minimax adaptive control system
-   * When `disturbanceSelect = 3` in line `172`, simulate the minimax adaptive control system first and then use the disturbance generated for the Hinfinity system
+   * When `disturbanceSelect = 2` in line `172`, simulate the minimax adaptive control system first and then use the disturbance generated for the Hinfinity system
 
 
 # Contributing Authors
