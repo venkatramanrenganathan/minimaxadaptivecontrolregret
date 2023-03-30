@@ -1,7 +1,7 @@
 # Regret Analysis for Minimax Adaptive Controller
 This repository contains the MATLAB code for studying the regret of a minimax adaptive control algorithm. 
 
-**Associated Paper:** Venkatraman Renganathan, Andrea Ianelli, and Anders Rantzer, `Online Learning and Regret Analysis for Minimax Adaptive Control Algorithm`, Submitted to IEEE Conference on Decision and Control, Singapore, 2023.
+**Associated Paper:** Venkatraman Renganathan, Andrea Iannelli, and Anders Rantzer, `Online Learning and Regret Analysis for Minimax Adaptive Control Algorithm`, Submitted to IEEE Conference on Decision and Control, Singapore, 2023.
 
 # Dependencies
 - Matlab
@@ -30,7 +30,7 @@ This repository contains the MATLAB code for studying the regret of a minimax ad
 
 # Contributing Authors
 1. [Venkatraman Renganathan - Lund University](https://github.com/venkatramanrenganathan)
-2. [Andrea Ianelli - University of Stuttgart](https://andreaian.github.io)
+2. [Andrea Iannelli - University of Stuttgart](https://andreaian.github.io)
 3. [Anders Rantzer - Lund University](https://control.lth.se/personnel/personnel/anders-rantzer/)
 
 # Funding Acknowledgement
