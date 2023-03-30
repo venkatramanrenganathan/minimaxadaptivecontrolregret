@@ -78,7 +78,7 @@ computeFlag = 0;    % Flag to decide if we want to compute the gains or load the
 if(computeFlag == 1)
     % Get minimax adaptive control (MAC) policies solving LMIs
     disp('Started Computing Minimax Adaptive Control Gains');
-    [MAC_status, MAC_gamma, MAC_PMatrices, MAC_KMatrices] = Approach2(AMatrices, BMatrices, Q, R, startGamma);    
+    [MAC_status, MAC_gamma, MAC_PMatrices, MAC_KMatrices] = Approach3(AMatrices, BMatrices, Q, R, startGamma);    
     save('doubleIntegratorData.mat','MAC_gamma','MAC_PMatrices', 'MAC_KMatrices');
     disp('Finished Computing Minimax Control Gains');
 else
@@ -138,7 +138,7 @@ disp('Finished Computing H_infinity Control Gains');
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Select the disturbance type: 1: adverse, 2: confuse, 3: sine
-disturbanceSelect = 3;   
+disturbanceSelect = 2;   
 
 % Define Placeholders for states and inputs for MAC & H_inf policies
 x_minmax  = zeros(n, T+1);             % States of MAC
@@ -148,7 +148,7 @@ u_hinfty  = zeros(m, T, numModels);    % H_infty inputs
 w_advers  = zeros(n, T, numModels);    % Adversarial disturbance
 
 % Populate the initial condition
-x_0 = [-5 1 3]';
+x_0 = [-5 1 3]'; % will also work for rand(n,1); 
 for i = 1:numModels
     x_minmax(:, 1) = x_0;
     x_hinfty(:, 1, i) = x_0;
@@ -157,54 +157,6 @@ end
 % Frequency response parameters
 Ts = 0.01;
 z = tf('z', Ts);
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% %% Simulate the trajectory with the Hinfinity control
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-% Loop through all finite set of linear system models
-for i = 1:numModels    
-    % Rename model matrices for notational brevity
-    Ai = AMatrices{i};
-    Bi = BMatrices{i};
-    Ki = K_Gains{i,1};
-    Fi = F_Gains{i,1};    
-    % Loop through the entire time horizon
-    for t = 2:T+1  
-        % Compute the H_infty full state feedback control
-        u_hinfty(:,t-1,i) = Ki*x_hinfty(:,t-1,i); 
-        % Generate the disturbance according to the selection made
-        if(disturbanceSelect == 1)
-            % Generate the H_infty worst case adversarial disturbance
-            w_advers(:,t-1,i) = Fi*x_hinfty(:,t-1,i); 
-        elseif(disturbanceSelect == 2)
-            % Generate confusing adversarial disturbance
-            modelsCombination = 1*rand(numModels,1);
-            % Subtract contribution of i^th model  
-            modelsCombination(i) = -1;             
-            for j = 1:numModels
-                w_advers(:,t-1,i) = w_advers(:,t-1,i) + modelsCombination(j)*(AMatrices{j}*x_hinfty(:,t-1,i) + BMatrices{j}*u_hinfty(:,t-1,i));
-            end
-        elseif(disturbanceSelect == 3)
-            % Find the transfer function from disturbance to [x,u]
-            T_d_to_z_i = [eye(n); Ki]*inv(z*eye(n) - (Ai + Bi*Ki));
-            % Find the frequency where worst gain occurs
-            [gpeaki, fpeaki] = getPeakGain(T_d_to_z_i);
-            % Evaluate the transfer function at the peak frequency
-            sysi_at_fmax = evalfr(T_d_to_z_i, exp(j*fpeaki*Ts));
-            % Perform a Singular value decomposition
-            [Ui, Si, Vi] = svd(sysi_at_fmax);
-            % Get the angle of Vi complex vector
-            viAngle = angle(Vi);
-            % Generate sinusoidal adversarial disturbance at that frequency
-            for j = 1:n
-                w_advers(j,t-1,i) = sin(fpeaki*(t-1) + viAngle(j))*real(Vi(j,1));
-            end
-        end    
-        % Update the state with the Hinfty control & generated disturbance
-        x_hinfty(:,t,i) = Ai*x_hinfty(:,t-1,i) + Bi*u_hinfty(:,t-1,i) + w_advers(:,t-1,i);        
-    end    
-end
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -250,32 +202,38 @@ for t = 2:T+1
     % Generate the disturbance according to the selection made
     if(disturbanceSelect == 1)
         % Use the worst case disturbance policy instead
-        w_minimax(:,t-1) = Fi*x_minmax(:,t-1); 
+        % w_minimax(:,t-1) = Fi*x_minmax(:,t-1); 
+        % Use the same worst case adversarial signal of hinfinity control
+        w_minimax(:,t-1) = w_advers(:,t-1,modelNum); 
     elseif(disturbanceSelect == 2)
         % Generate Confusing disturbance
-        modelsCombination = 1*rand(numModels,1);
+        modelsCombination = ones(numModels,1);
         % Subtract the contribution of original 
         modelsCombination(modelNum) = -1;        
         for i = 1:numModels
             w_minimax(:,t-1) = w_minimax(:,t-1) + modelsCombination(i)*(AMatrices{i}*x_minmax(:,t-1) + BMatrices{i}*u_minmax(:,t-1));
         end
     elseif(disturbanceSelect == 3)
-        % Find the transfer function from disturbance to [x,u]
-        T_d_to_z_minimax = [eye(n); Ki]*inv(z*eye(n) - (A + sgn*B*Ki));
-        % Find the frequency where worst gain occurs
-        [gpeak_minmax, fpeak_minmax] = getPeakGain(T_d_to_z_minimax);
-        % Evaluate the transfer function at the peak frequency
-        sys_minmax_at_fmax = evalfr(T_d_to_z_minimax, exp(j*fpeak_minmax*Ts));
-        % Perform a Singular value decomposition
-        [U_minmax, S_minmax, V_minmax] = svd(sys_minmax_at_fmax);
-        % Get the angle of V_minmax complex vector
-        vminmax_Angle = angle(V_minmax);
-        % Generate sinusoidal adversarial disturbance at that frequency
-        for j = 1:n
-            w_minimax(j,t-1) = sin(fpeak_minmax*(t-1) + vminmax_Angle(j))*real(V_minmax(j,1));
-        end
+        % Use the same sinusoid of hinfinity control
+        w_minimax(:,t-1) = w_advers(:,t-1,modelNum); 
+%         % Find the transfer function from disturbance to [x,u]
+%         T_d_to_z_minimax = [eye(n); Ki]*inv(z*eye(n) - (A + sgn*B*Ki));
+%         % Find the frequency where worst gain occurs
+%         [gpeak_minmax, fpeak_minmax] = getPeakGain(T_d_to_z_minimax);
+%         % Evaluate the transfer function at the peak frequency
+%         sys_minmax_at_fmax = evalfr(T_d_to_z_minimax, exp(j*fpeak_minmax*Ts));
+%         % Perform a Singular value decomposition
+%         [U_minmax, S_minmax, V_minmax] = svd(sys_minmax_at_fmax);
+%         % Get the angle of V_minmax complex vector
+%         vminmax_Angle = angle(V_minmax);
+%         % Generate sinusoidal adversarial disturbance at that frequency
+%         for j = 1:n
+%             w_minimax(j,t-1) = sin(fpeak_minmax*(t-1) + vminmax_Angle(j))*real(V_minmax(j,1));
+%         end
     end    
 
+    % w_minimax(j,t-1) = w_advers(:,t-1,i);
+    
     % Perform the state update with the minimax control & Hinfty noise
     x_minmax(:,t) = A*x_minmax(:,t-1) + sgn*B*u_minmax(:,t-1) + w_minimax(:,t-1);  
 
@@ -284,6 +242,56 @@ for t = 2:T+1
     zminus = zminus + gammaSqr*norm(A*x_minmax(:,t-1) - B*u_minmax(:,t-1) - x_minmax(:,t))^2;
 
 end    
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% %% Simulate the trajectory with the Hinfinity control
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Loop through all finite set of linear system models
+for i = 1:numModels    
+    % Rename model matrices for notational brevity
+    Ai = AMatrices{i};
+    Bi = BMatrices{i};
+    Ki = K_Gains{i,1};
+    Fi = F_Gains{i,1};    
+    % Loop through the entire time horizon
+    for t = 2:T+1  
+        % Compute the H_infty full state feedback control
+        u_hinfty(:,t-1,i) = Ki*x_hinfty(:,t-1,i); 
+        % Generate the disturbance according to the selection made
+        if(disturbanceSelect == 1)
+            % Generate the H_infty worst case adversarial disturbance
+            w_advers(:,t-1,i) = Fi*x_hinfty(:,t-1,i); 
+        elseif(disturbanceSelect == 2)
+            % Use the same confusing disturbance from Minimax control
+            w_advers(:,t-1,i) = w_minimax(:,t-1);
+%             % Generate confusing adversarial disturbance
+%             modelsCombination = zeros(numModels,1);
+%             % Subtract contribution of i^th model  
+%             modelsCombination(i) = -1;             
+%             for j = 1:numModels
+%                 w_advers(:,t-1,i) = w_advers(:,t-1,i) + modelsCombination(j)*(AMatrices{j}*x_hinfty(:,t-1,i) + BMatrices{j}*u_hinfty(:,t-1,i));
+%             end
+        elseif(disturbanceSelect == 3)
+            % Find the transfer function from disturbance to [x,u]
+            T_d_to_z_i = [eye(n); Ki]*inv(z*eye(n) - (Ai + Bi*Ki));
+            % Find the frequency where worst gain occurs
+            [gpeaki, fpeaki] = getPeakGain(T_d_to_z_i);
+            % Evaluate the transfer function at the peak frequency
+            sysi_at_fmax = evalfr(T_d_to_z_i, exp(j*fpeaki*Ts));
+            % Perform a Singular value decomposition
+            [Ui, Si, Vi] = svd(sysi_at_fmax);
+            % Get the angle of Vi complex vector
+            viAngle = angle(Vi);
+            % Generate sinusoidal adversarial disturbance at that frequency
+            for j = 1:n
+                w_advers(j,t-1,i) = sin(fpeaki*(t-1) + viAngle(j))*real(Vi(j,1));
+            end
+        end    
+        % Update the state with the Hinfty control & generated disturbance
+        x_hinfty(:,t,i) = Ai*x_hinfty(:,t-1,i) + Bi*u_hinfty(:,t-1,i) + w_advers(:,t-1,i);        
+    end    
+end
 
 %% Plot the minimax trajectories vs time
 figNum = 1;
@@ -371,20 +379,19 @@ for i = 1:numModels
         minmaxStateSum = 0;
         minmaxInputSum = 0;
         hinftyStateSum = 0;
-        hinftyInputSum = 0;
-        disturbanceSum = 0;
+        hinftyInputSum = 0;      
         % compute u'Ru and add it to control sum
         if(t < T+1)
             minmaxInputSum = u_minmax(:,t)'*R*u_minmax(:,t);
-            hinftyInputSum = u_hinfty(:,t,i)'*R*u_hinfty(:,t,i);
-            disturbanceSum = w_minimax(:,t)'*w_minimax(:,t);
+            hinftyInputSum = u_hinfty(:,t,i)'*R*u_hinfty(:,t,i);            
         end
         % compute x'Qx and add it to state sum
         minmaxStateSum = x_minmax(:,t)'*Q*x_minmax(:,t);
         hinftyStateSum = x_hinfty(:,t,i)'*Q*x_hinfty(:,t,i);  
         
         % Record the regret incurred at time t
-        modelRegrets(i, t) = (minmaxStateSum + minmaxInputSum) - (hinftyStateSum + hinftyInputSum) - gammaSqr*disturbanceSum;         
+        % modelRegrets(i, t) = (minmaxStateSum + minmaxInputSum) - (hinftyStateSum + hinftyInputSum) - gammaSqr*disturbanceSum;         
+        modelRegrets(i, t) = (minmaxStateSum + minmaxInputSum) - (hinftyStateSum + hinftyInputSum);         
     end
 end
 
