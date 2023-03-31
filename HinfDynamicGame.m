@@ -9,7 +9,7 @@ m = size(B, 2);
 if(gammaOptFlag == 1)
     % Compute the bisection gamma and control gains
     % Initialize a starting disturbance attenuation level
-    gamma = 100;
+    % gamma = 100;
 
     % Define UB and LB used in the bisection.  
     UB = gamma;
@@ -36,9 +36,11 @@ if(gammaOptFlag == 1)
         % Set the upper and lower limits for bisection
         if isequal(K, [])
             disp('K is Empty');
+            disp(gamma)
             UB = gamma;
         else
             disp('K is not Empty');
+            disp(gamma)
             LB = gamma;
         end
     end

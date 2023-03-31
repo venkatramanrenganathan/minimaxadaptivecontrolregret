@@ -6,22 +6,13 @@
 %
 % Copyrights Authors: 1) Venkatraman Renganathan - Lund University, Sweden.
 %                     2) Anders Rantzer - Lund University, Sweden.
-%                     3) Andrea Ianelli - University of Stuttgart
+%                     3) Andrea Iannelli - University of Stuttgart, Germany
 %
 % Email: venkatraman.renganathan@control.lth.se
 %
 % Courtesy: 1.) Daniel Cedelberg - Linköping University, Sweden.
 %           2.) Anders Hansson - Linköping University, Sweden.
 %           3.) Olle Kjellkvist - Lund University, Sweden.
-%
-%
-% RUNNING WITH MOSEK - if it causes trouble
-% 1. Go to terminal in mac
-% 2. type the following and press enter: xattr -dr com.apple.quarantine /Users/venkat/Documents/MATLAB/mosek/10.0/tools/platform/osx64x86/bin
-% 3. Include Mosek into path
-% 4. In matlab command window type the following and press enter: setenv('PATH', [getenv('PATH') ';/Users/venkat/Documents/MATLAB/mosek/10.0/tools/platform/osx64x86/bin']);
-% 5. In matlab command window type the following and press enter: mosekdiag
-% 6. MATLAB will now give the message that "mosekopt works OK. You can use MOSEK in MATLAB."
 %
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -31,8 +22,8 @@
 clear all; close all; clc;
 
 % set properties for plotting
-set(groot,'defaultAxesTickLabelInterpreter','latex');  
-set(groot,'defaulttextinterpreter','latex');
+% set(groot,'defaultAxesTickLabelInterpreter','latex');  
+% set(groot,'defaulttextinterpreter','latex');
 set(groot,'defaultLegendInterpreter','latex');
 
 % Get current working folder info
@@ -71,14 +62,14 @@ if(computeFlag == 1)
         while(notOkayFlag == 1)
             % generate random system
             A = 2*rand(n, n);
-            A = (A + A')/2;
+            % A = (A + A')/2;
             B = 2*rand(n, 1);
             % find the rank of controllability matrix
-            if(rank(ctrb(A,B)) == n)
+            if(rank(ctrb(A,B)) == n && all(eig(A) < 1))
                 notOkayFlag = 0;
                 AMatrices{i} = A;
                 BMatrices{i} = B;
-            end
+            end            
         end
     end
     save('RandomSystemData.mat','AMatrices','BMatrices');
@@ -115,7 +106,7 @@ end
 % Infer the square of gamma
 gammaSqr = (MAC_gamma*MAC_gamma);
 
-% Check the answers
+% Check the answers - Need to do it for all nxn matrices
 correctnessFlag = 0;
 if(all(eig(MAC_PMatrices{1,2} - MAC_PMatrices{1,1})) >= 0)
     disp('P_{12} > P_{11} Satisfied');
@@ -123,6 +114,18 @@ if(all(eig(MAC_PMatrices{1,2} - MAC_PMatrices{1,1})) >= 0)
 end
 if(all(eig(MAC_PMatrices{2,1} - MAC_PMatrices{2,2})) >= 0)
     disp('P_{21} > P_{22} Satisfied');
+    correctnessFlag = 1;
+end
+if(all(eig(gammaSqr*eye(n) - MAC_PMatrices{2,1})) >= 0)
+    disp('P_{21} < gammaSqr*I Satisfied');
+    correctnessFlag = 1;
+end
+if(all(eig(gammaSqr*eye(n) - MAC_PMatrices{3,1})) >= 0)
+    disp('P_{31} < gammaSqr*I Satisfied');
+    correctnessFlag = 1;
+end
+if(all(eig(gammaSqr*eye(n) - MAC_PMatrices{2,3})) >= 0)
+    disp('P_{23} < gammaSqr*I Satisfied');
     correctnessFlag = 1;
 end
 if(all(eig(gammaSqr*eye(n) - MAC_PMatrices{2,1})) >= 0)
@@ -174,6 +177,9 @@ disturbanceSelect = 2;
 % Define true dynamics to be used from all the possible models in simulation
 modelNum = 2; 
 
+% Set the index of dynamics that confusing w should trick policy to choose
+cheatModelNum = 3;
+
 % Define Placeholders for states and inputs for MAC & H_inf policies
 x_minmax  = zeros(n, T+1);  % States of MAC
 u_minmax  = zeros(m, T);    % MAC inputs
@@ -184,7 +190,7 @@ w_advers  = zeros(n, T);    % Adversarial disturbance
 % Populate the initial condition
 x_0 = [-5 1 3]'; % will also work for rand(n,1); 
 x_minmax(:, 1) = x_0;
-x_hinfty(:, 1) = x_0;
+x_hinfty(:, 1) = x_0; 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Simulate the trajectory with the Minimax Adaptive control
@@ -216,13 +222,16 @@ for t = 2:T+1
         w_minimax(:,t-1) = w_advers(:,t-1); 
     elseif(disturbanceSelect == 2)
         % Generate Confusing disturbance
-        modelsCombination = 0.01*rand(numModels,1);        
+%         modelsCombination = 0.01*rand(numModels,1);        
+        modelsCombination = zeros(numModels,1);        
         % Subtract the contribution of original 
         modelsCombination(modelNum) = -1;                
+        % Choose the i = cheatModelNum \neq nodelNum which you need policy to choose
+        modelsCombination(cheatModelNum) = 1;
         for i = 1:numModels
-            if(mod(t,2) == 0 || mod(t,3) == 0)
-                modelsCombination(i) = 1;        
-            end
+%             if(mod(t,2) == 0 || mod(t,3) == 0)
+%                 modelsCombination(i) = 1;        
+%             end
             w_minimax(:,t-1) = w_minimax(:,t-1) + modelsCombination(i)*(AMatrices{i}*x_minmax(:,t-1) + BMatrices{i}*u_minmax(:,t-1));
         end
     end    
@@ -235,7 +244,7 @@ for t = 2:T+1
         zData(i, 1) = zData(i, 1) + gammaSqr*norm(AMatrices{i}*x_minmax(:,t-1) + BMatrices{i}*u_minmax(:,t-1) - x_minmax(:,t))^2;
     end
 
-end    
+end   
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % %% Simulate the trajectory with the Hinfinity control
@@ -256,6 +265,7 @@ z = tf('z', Ts);
 T_d_to_z_i = [eye(n); Ki]*inv(z*eye(n) - (Ai + Bi*Ki));
 % Find & record the frequency where worst gain occurs
 [peakGain, peakFreq] = getPeakGain(T_d_to_z_i);
+% [peakGain, peakFreq] = hinfnorm(T_d_to_z_i);
 % Evaluate T_d_to_z_i at z = e^{jwn}
 T_d_to_z_i_eval = [eye(n); Ki]*inv(exp(j*peakFreq*Ts)*eye(n) - (Ai + Bi*Ki));
 % Evaluate the transfer function at the peak frequency
@@ -265,6 +275,8 @@ T_d_to_z_i_eval = [eye(n); Ki]*inv(exp(j*peakFreq*Ts)*eye(n) - (Ai + Bi*Ki));
 [Ui, Si, Vi] = svd(T_d_to_z_i_eval);
 % Get the angle of Vi complex vector
 viAngle = angle(Vi);
+% Get the magnitude of Vi complex vector
+viMagnitude = abs(Vi);
 
 % Loop through the entire time horizon
 for t = 2:T+1  
@@ -278,9 +290,10 @@ for t = 2:T+1
         % Use the same confusing disturbance from Minimax control
         w_advers(:,t-1) = w_minimax(:,t-1);
     elseif(disturbanceSelect == 3)            
-        % Generate sinusoidal adversarial disturbance at that frequency
+        % Generate sinusoidal adversarial disturbance at peak frequency 
+        % Use Vi(:, 1) for worst case input direction
         for j = 1:n
-            w_advers(j,t-1) = real(Vi(j,1))*cos(peakFreq*(t-1) + viAngle(j, 1));
+            w_advers(j,t-1) = viMagnitude(j,1)*cos(peakFreq*(t-1) + viAngle(j, 1));
         end
     end    
     % Update the state with the Hinfty control & generated disturbance
@@ -351,47 +364,13 @@ totalStateControlRegret = max(modelbasedStateCtrlDiffRegret(:, end));
 fprintf('Sum of square of differences total regret: %.3f \n', totalStateControlRegret);
 
 
-%% Plot the Difference trajectories and difference of control inputs (both Hinfty and Minimax) vs time
-figNum = figNum + 1;
-Tvec = 0:T-1;
-figure(figNum);
-set(gcf, 'Position', get(0, 'Screensize'));
-plot(Tvec, u_minmax(:,:) - u_hinfty(:,:), '-.k');
-hold on;
-plot(tvec, x_minmax(:,:)' - x_hinfty(:,:)');
-hold on;
-xlabel('time');
-legendText1 = '$x^{\bar{\pi}^{\dagger}}_{k} - x^{\pi^{\star}_{';
-legendText2 = num2str(modelNum);
-legendText3 = '}}_{k}$'; 
-legend1Text = strcat(legendText1, strcat(legendText2, legendText3)); 
-legendText4 = '$u^{\bar{\pi}^{\dagger}}_{k} - u^{\pi^{\star}_{';
-legendText5 = num2str(modelNum);
-legendText6 = '}}_{k}$'; 
-legend2Text = strcat(legendText4, strcat(legendText5, legendText6));  
-legend(legend2Text, '$[x^{\bar{\pi}^{\dagger}}_{k}]_{1} - [x^{\pi^{\star}_{2}}_{k}]_{1}$', '$[x^{\bar{\pi}^{\dagger}}_{k}]_{2} - [x^{\pi^{\star}_{2}}_{k}]_{2}$', '$[x^{\bar{\pi}^{\dagger}}_{k}]_{3} - [x^{\pi^{\star}_{2}}_{k}]_{3}$', 'Location','southeast');
-hold off;
-a = findobj(gcf, 'type', 'axes');
-h = findobj(gcf, 'type', 'line');
-set(h, 'linewidth', 4);
-set(a, 'linewidth', 4);
-set(a, 'FontSize', 50);
-if(disturbanceSelect == 1)
-    filename = 'AdverseWStatesControlsDiff.png';    
-elseif(disturbanceSelect == 2)
-    filename = 'ConfuseWStatesControlsDiff.png';    
-elseif(disturbanceSelect == 3)
-    filename = 'SinusoidWStatesControlsDiff.png';    
-end
-file = fullfile(currentFolder, filename);
-exportgraphics(figure(figNum), file);
-
 %% Plot the State-Control Difference regret vs time
 Tvec = 0:T;
 TDivVec = Tvec + 1;
 plotRegrets = zeros(T+1, 1);
+tpower = 1;
 for t = 1:T+1
-    plotRegrets(t,1) = modelbasedStateCtrlDiffRegret(1,t)/t;    
+    plotRegrets(t,1) = modelbasedStateCtrlDiffRegret(1,t)/(t)^(tpower);    % tpower (0.8, 1) decreases to 0, (0, 0.79)-increases
 end
 figNum = figNum+1;
 figure(figNum);
@@ -405,9 +384,9 @@ hold off;
 legend('$\mathcal{R}(\bar{\pi}^{\dagger}, \pi^{\star}_{2}, T)$', '$\frac{\mathcal{R}(\bar{\pi}^{\dagger}, \pi^{\star}_{2}, T)}{T}$', 'Location','southeast');
 a = findobj(gcf, 'type', 'axes');
 h = findobj(gcf, 'type', 'line');
-set(h, 'linewidth', 4);
-set(a, 'linewidth', 4);
-set(a, 'FontSize', 50);
+set(h, 'linewidth', 6);
+set(a, 'linewidth', 6);
+set(a, 'FontSize', 60);
 if(disturbanceSelect == 1)
     saveas(figure(figNum), [currentFolder 'AdverseWRegret.png']);
 elseif(disturbanceSelect == 2)
@@ -423,13 +402,14 @@ set(gcf, 'Position', get(0, 'Screensize'));
 plot(tvec, x_minmax(:,:)');
 hold on;
 xlabel('time');
-ylabel('$x^{\bar{\pi}^{\dagger}}_{k}$', 'interpreter', 'latex');
+% ylabel('$x^{\bar{\pi}^{\dagger}}_{k}$', 'interpreter', 'latex');
+ylabel('states');
 hold off;
 a = findobj(gcf, 'type', 'axes');
 h = findobj(gcf, 'type', 'line');
-set(h, 'linewidth', 4);
-set(a, 'linewidth', 4);
-set(a, 'FontSize', 50);
+set(h, 'linewidth', 6);
+set(a, 'linewidth', 6);
+set(a, 'FontSize', 60);
 if(disturbanceSelect == 1)
     saveas(figure(figNum), [currentFolder 'MACAdverseWStates.png']);
 elseif(disturbanceSelect == 2)
@@ -445,17 +425,18 @@ set(gcf, 'Position', get(0, 'Screensize'));
 plot(tvec, x_hinfty(:,:)');
 hold on;
 xlabel('time');
-legendText1 = '$x^{\pi^{\star}_{';
-legendText2 = num2str(modelNum);
-legendText3 = '}}_{k}$'; 
-legendText = strcat(legendText1, strcat(legendText2, legendText3)); 
-ylabel(legendText, 'interpreter', 'latex');
+% legendText1 = '$x^{\pi^{\star}_{';
+% legendText2 = num2str(modelNum);
+% legendText3 = '}}_{k}$'; 
+% legendText = strcat(legendText1, strcat(legendText2, legendText3)); 
+% ylabel(legendText, 'interpreter', 'latex');
+ylabel('states');
 hold off;
 a = findobj(gcf, 'type', 'axes');
 h = findobj(gcf, 'type', 'line');
-set(h, 'linewidth', 4);
-set(a, 'linewidth', 4);
-set(a, 'FontSize', 50);
+set(h, 'linewidth', 6);
+set(a, 'linewidth', 6);
+set(a, 'FontSize', 60);
 if(disturbanceSelect == 1)
     saveas(figure(figNum), [currentFolder 'HinfAdverseWStates.png']);
 elseif(disturbanceSelect == 2)
@@ -464,6 +445,41 @@ elseif(disturbanceSelect == 3)
     saveas(figure(figNum), [currentFolder 'HinfSinusoidWStates.png']);
 end
 
+% %% Plot the Difference trajectories and difference of control inputs (both Hinfty and Minimax) vs time
+% figNum = figNum + 1;
+% Tvec = 0:T-1;
+% figure(figNum);
+% set(gcf, 'Position', get(0, 'Screensize'));
+% plot(Tvec, u_minmax(:,:) - u_hinfty(:,:), '-.k');
+% hold on;
+% plot(tvec, x_minmax(:,:)' - x_hinfty(:,:)');
+% hold on;
+% xlabel('time');
+% legendText1 = '$x^{\bar{\pi}^{\dagger}}_{k} - x^{\pi^{\star}_{';
+% legendText2 = num2str(modelNum);
+% legendText3 = '}}_{k}$'; 
+% legend1Text = strcat(legendText1, strcat(legendText2, legendText3)); 
+% legendText4 = '$u^{\bar{\pi}^{\dagger}}_{k} - u^{\pi^{\star}_{';
+% legendText5 = num2str(modelNum);
+% legendText6 = '}}_{k}$'; 
+% legend2Text = strcat(legendText4, strcat(legendText5, legendText6));  
+% legend(legend2Text, '$[x^{\bar{\pi}^{\dagger}}_{k}]_{1} - [x^{\pi^{\star}_{2}}_{k}]_{1}$', '$[x^{\bar{\pi}^{\dagger}}_{k}]_{2} - [x^{\pi^{\star}_{2}}_{k}]_{2}$', '$[x^{\bar{\pi}^{\dagger}}_{k}]_{3} - [x^{\pi^{\star}_{2}}_{k}]_{3}$', 'Location','southeast');
+% hold off;
+% a = findobj(gcf, 'type', 'axes');
+% h = findobj(gcf, 'type', 'line');
+% set(h, 'linewidth', 6);
+% set(a, 'linewidth', 6);
+% set(a, 'FontSize', 60);
+% if(disturbanceSelect == 1)
+%     filename = 'AdverseWStatesControlsDiff.png';    
+% elseif(disturbanceSelect == 2)
+%     filename = 'ConfuseWStatesControlsDiff.png';    
+% elseif(disturbanceSelect == 3)
+%     filename = 'SinusoidWStatesControlsDiff.png';    
+% end
+% file = fullfile(currentFolder, filename);
+% exportgraphics(figure(figNum), file);
+%
 %% Plot the Hinfinity disturbance inputs vs time
 % Tvec = 0:T-1;
 % figNum = figNum + 1;
@@ -479,9 +495,9 @@ end
 % hold on;
 % a = findobj(gcf, 'type', 'axes');
 % h = findobj(gcf, 'type', 'line');
-% set(h, 'linewidth', 4);
-% set(a, 'linewidth', 4);
-% set(a, 'FontSize', 50);
+% set(h, 'linewidth', 6);
+% set(a, 'linewidth', 6);
+% set(a, 'FontSize', 60);
 % if(disturbanceSelect == 1)
 %     filename = 'HinfAdverseW.png';
 % elseif(disturbanceSelect == 2)
@@ -508,9 +524,9 @@ end
 % ylabel(legendText);
 % a = findobj(gcf, 'type', 'axes');
 % h = findobj(gcf, 'type', 'line');
-% set(h, 'linewidth', 4);
-% set(a, 'linewidth', 4);
-% set(a, 'FontSize', 50);
+% set(h, 'linewidth', 6);
+% set(a, 'linewidth', 6);
+% set(a, 'FontSize', 60);
 % if(disturbanceSelect == 1)
 %     saveas(figure(figNum), [currentFolder 'AdverseWControl.png']);
 % elseif(disturbanceSelect == 2)
@@ -537,9 +553,9 @@ end
 % a = findobj(gcf, 'type', 'axes');
 % h = findobj(gcf, 'type', 'line');
 % legend('$\bar{\mathcal{R}}(\pi^{\dagger}, \pi^{\star}_{2}, T)$', '$\frac{\bar{\mathcal{R}}(\pi^{\dagger}, \pi^{\star}_{2}, T)}{T}$', 'Location','southeast');
-% set(h, 'linewidth', 4);
-% set(a, 'linewidth', 4);
-% set(a, 'FontSize', 50);
+% set(h, 'linewidth', 6);
+% set(a, 'linewidth', 6);
+% set(a, 'FontSize', 60);
 % if(disturbanceSelect == 1)
 %     saveas(figure(figNum), [currentFolder 'RegretAdverseW.png']);
 % elseif(disturbanceSelect == 2)
@@ -560,9 +576,9 @@ end
 % hold on;
 % a = findobj(gcf, 'type', 'axes');
 % h = findobj(gcf, 'type', 'line');
-% set(h, 'linewidth', 4);
-% set(a, 'linewidth', 4);
-% set(a, 'FontSize', 50);
+% set(h, 'linewidth', 6);
+% set(a, 'linewidth', 6);
+% set(a, 'FontSize', 60);
 % if(disturbanceSelect == 1)
 %     saveas(figure(figNum), [currentFolder 'MACAdverseW.png']);
 % elseif(disturbanceSelect == 2)

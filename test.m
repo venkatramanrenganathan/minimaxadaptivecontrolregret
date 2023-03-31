@@ -34,3 +34,27 @@
 %         Z = Z + Z_update*Z_update';
 %     end    
 % end
+
+
+
+load('RandomSystemData.mat');
+load('RandomSystemMinimaxData.mat');
+Q = eye(3);         % State penalty matrix 
+R = eye(1);         % Input penalty matrix 
+startGamma = 100;   % Starting gain from disturbance to error
+gammaOptFlag = 0;
+
+% Initialize the control gains, disturbance gains and worst case gamma 
+K_Gains = cell(4, 1);
+F_Gains = cell(4, 1);
+Gammas  = zeros(4, 1);
+
+Hinf_gammas = [1.266 4.544 2.913 2.298];
+MBSubGaps = MAC_gamma - Hinf_gammas
+
+minGap = MAC_gamma - max(Hinf_gammas)
+maxGap = MAC_gamma - min(Hinf_gammas)
+
+% Get H-infinity Control & adversarial disturbance via Dynamic Games Approach - USE MINIMAX GAMMA
+% i = 4;
+% [K_Gains{i,1}, F_Gains{i,1}, Gammas(i,1)] = HinfDynamicGame(AMatrices{i}, BMatrices{i}, Q, R, MAC_gamma, gammaOptFlag);
