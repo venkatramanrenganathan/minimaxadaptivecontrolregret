@@ -172,7 +172,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Select the disturbance type: 1: adverse, 2: confuse, 3: sinusoidal
-disturbanceSelect = 2;   
+disturbanceSelect = 1;   
 
 % Define true dynamics to be used from all the possible models in simulation
 modelNum = 2; 
@@ -191,60 +191,6 @@ w_advers  = zeros(n, T);    % Adversarial disturbance
 x_0 = [-5 1 3]'; % will also work for rand(n,1); 
 x_minmax(:, 1) = x_0;
 x_hinfty(:, 1) = x_0; 
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% Simulate the trajectory with the Minimax Adaptive control
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-% Get the true dynamics
-ATrue = AMatrices{modelNum};
-BTrue = BMatrices{modelNum};
-
-% Adversarial disturbance
-w_minimax = zeros(n, T);  
-
-% Set placeholder for zData
-zData = zeros(numModels, 1);
-
-% Loop through the entire time horizon
-for t = 2:T+1         
-
-    % Get model that best fits disturbance trajectory in least squares sense
-    [zMin, zID] = min(zData);
-    fprintf('Controller selects model %d as the best fit for disturbance trajectory \n', zID);
-    
-    % Compute the minimax full state feedback control   
-    u_minmax(:,t-1) = -MAC_KMatrices{zID}*x_minmax(:,t-1);
-    
-    % Generate the disturbance according to the selection made
-    if(disturbanceSelect == 1 || disturbanceSelect == 3)        
-        % Use same worst-case adversarial/sinusoidal hinfinity disturbance
-        w_minimax(:,t-1) = w_advers(:,t-1); 
-    elseif(disturbanceSelect == 2)
-        % Generate Confusing disturbance
-%         modelsCombination = 0.01*rand(numModels,1);        
-        modelsCombination = zeros(numModels,1);        
-        % Subtract the contribution of original 
-        modelsCombination(modelNum) = -1;                
-        % Choose the i = cheatModelNum \neq nodelNum which you need policy to choose
-        modelsCombination(cheatModelNum) = 1;
-        for i = 1:numModels
-%             if(mod(t,2) == 0 || mod(t,3) == 0)
-%                 modelsCombination(i) = 1;        
-%             end
-            w_minimax(:,t-1) = w_minimax(:,t-1) + modelsCombination(i)*(AMatrices{i}*x_minmax(:,t-1) + BMatrices{i}*u_minmax(:,t-1));
-        end
-    end    
-    
-    % Perform the state update with the minimax control & Hinfty noise
-    x_minmax(:,t) = ATrue*x_minmax(:,t-1) + BTrue*u_minmax(:,t-1) + w_minimax(:,t-1);  
-
-    % Update the Z variable     
-    for i = 1:numModels
-        zData(i, 1) = zData(i, 1) + gammaSqr*norm(AMatrices{i}*x_minmax(:,t-1) + BMatrices{i}*u_minmax(:,t-1) - x_minmax(:,t))^2;
-    end
-
-end   
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % %% Simulate the trajectory with the Hinfinity control
@@ -298,6 +244,60 @@ for t = 2:T+1
     end    
     % Update the state with the Hinfty control & generated disturbance
     x_hinfty(:,t) = Ai*x_hinfty(:,t-1) + Bi*u_hinfty(:,t-1) + w_advers(:,t-1);        
+end   
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Simulate the trajectory with the Minimax Adaptive control
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Get the true dynamics
+ATrue = AMatrices{modelNum};
+BTrue = BMatrices{modelNum};
+
+% Adversarial disturbance
+w_minimax = zeros(n, T);  
+
+% Set placeholder for zData
+zData = zeros(numModels, 1);
+
+% Loop through the entire time horizon
+for t = 2:T+1         
+
+    % Get model that best fits disturbance trajectory in least squares sense
+    [zMin, zID] = min(zData);
+    fprintf('Controller selects model %d as the best fit for disturbance trajectory \n', zID);
+    
+    % Compute the minimax full state feedback control   
+    u_minmax(:,t-1) = -MAC_KMatrices{zID}*x_minmax(:,t-1);
+    
+    % Generate the disturbance according to the selection made
+    if(disturbanceSelect == 1 || disturbanceSelect == 3)        
+        % Use same worst-case adversarial/sinusoidal hinfinity disturbance
+        w_minimax(:,t-1) = w_advers(:,t-1); 
+    elseif(disturbanceSelect == 2)
+        % Generate Confusing disturbance
+%         modelsCombination = 0.01*rand(numModels,1);        
+        modelsCombination = zeros(numModels,1);        
+        % Subtract the contribution of original 
+        modelsCombination(modelNum) = -1;                
+        % Choose the i = cheatModelNum \neq nodelNum which you need policy to choose
+        modelsCombination(cheatModelNum) = 1;
+        for i = 1:numModels
+%             if(mod(t,2) == 0 || mod(t,3) == 0)
+%                 modelsCombination(i) = 1;        
+%             end
+            w_minimax(:,t-1) = w_minimax(:,t-1) + modelsCombination(i)*(AMatrices{i}*x_minmax(:,t-1) + BMatrices{i}*u_minmax(:,t-1));
+        end
+    end    
+    
+    % Perform the state update with the minimax control & Hinfty noise
+    x_minmax(:,t) = ATrue*x_minmax(:,t-1) + BTrue*u_minmax(:,t-1) + w_minimax(:,t-1);  
+
+    % Update the Z variable     
+    for i = 1:numModels
+        zData(i, 1) = zData(i, 1) + gammaSqr*norm(AMatrices{i}*x_minmax(:,t-1) + BMatrices{i}*u_minmax(:,t-1) - x_minmax(:,t))^2;
+    end
+
 end   
 
 
