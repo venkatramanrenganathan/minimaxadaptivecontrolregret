@@ -36,7 +36,7 @@ figNum = 0;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-T = 100;     % Set time horizon
+T = 30;     % Set time horizon
 tvec = 0:T; % A vector of times till time horizon 
 
 % Set the number of models needed
@@ -172,7 +172,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Select the disturbance type: 1: adverse, 2: confuse, 3: sinusoidal
-disturbanceSelect = 1;   
+disturbanceSelect = 3;   
 
 % Define true dynamics to be used from all the possible models in simulation
 modelNum = 2; 
@@ -239,7 +239,7 @@ for t = 2:T+1
         % Generate sinusoidal adversarial disturbance at peak frequency 
         % Use Vi(:, 1) for worst case input direction
         for j = 1:n
-            w_advers(j,t-1) = viMagnitude(j,1)*cos(peakFreq*(t-1) + viAngle(j, 1));
+            w_advers(j,t-1) = 0.10*viMagnitude(j,1)*cos(peakFreq*(t-1) + viAngle(j, 1));
         end
     end    
     % Update the state with the Hinfty control & generated disturbance
@@ -298,8 +298,36 @@ for t = 2:T+1
         zData(i, 1) = zData(i, 1) + gammaSqr*norm(AMatrices{i}*x_minmax(:,t-1) + BMatrices{i}*u_minmax(:,t-1) - x_minmax(:,t))^2;
     end
 
-end   
+end
 
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Store the trajectory with the Hinfty and Minimax Adaptive control
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+if(disturbanceSelect == 1)
+    adverse_dist_x_hinfty = x_hinfty;
+    adverse_dist_u_hinfty = u_hinfty;    
+    adverse_dist_x_minmax = x_minmax;
+    adverse_dist_u_minmax = u_minmax;
+    save('AdverseDistHinftyData.mat','adverse_dist_x_hinfty','adverse_dist_u_hinfty');
+    save('AdverseDistMinimaxData.mat','adverse_dist_x_minmax','adverse_dist_u_minmax');
+elseif(disturbanceSelect == 2)
+    confuse_dist_x_hinfty = x_hinfty;
+    confuse_dist_u_hinfty = u_hinfty;    
+    confuse_dist_x_minmax = x_minmax;
+    confuse_dist_u_minmax = u_minmax;
+    save('ConfuseDistHinftyData.mat','confuse_dist_x_hinfty','confuse_dist_u_hinfty');
+    save('ConfuseDistMinimaxData.mat','confuse_dist_x_minmax','confuse_dist_u_minmax');
+elseif(disturbanceSelect == 3)
+    sine_dist_x_hinfty = x_hinfty;
+    sine_dist_u_hinfty = u_hinfty;    
+    sine_dist_x_minmax = x_minmax;
+    sine_dist_u_minmax = u_minmax;
+    save('SineDistHinftyData.mat','sine_dist_x_hinfty','sine_dist_u_hinfty');
+    save('SineDistMinimaxData.mat','sine_dist_x_minmax','sine_dist_u_minmax');
+end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Compute the Model-based Regret & the Total Regret
@@ -363,15 +391,30 @@ fprintf('Difference of sum of squares total regret: %.3f \n', totalCostRegret);
 totalStateControlRegret = max(modelbasedStateCtrlDiffRegret(:, end));
 fprintf('Sum of square of differences total regret: %.3f \n', totalStateControlRegret);
 
-
-%% Plot the State-Control Difference regret vs time
-Tvec = 0:T;
-TDivVec = Tvec + 1;
+% Calculate cumsum(R/T)
 plotRegrets = zeros(T+1, 1);
 tpower = 1;
 for t = 1:T+1
     plotRegrets(t,1) = modelbasedStateCtrlDiffRegret(1,t)/(t)^(tpower);    % tpower (0.8, 1) decreases to 0, (0, 0.79)-increases
 end
+% Save Regret data
+if(disturbanceSelect == 1)
+    instAdvRegret = modelbasedStateCtrlDiffRegret;
+    cumAdvRegret = plotRegrets;
+    save('RegretAdverseData.mat','instAdvRegret','cumAdvRegret');
+elseif(disturbanceSelect == 2)
+    instConfRegret = modelbasedStateCtrlDiffRegret;
+    cumConfRegret = plotRegrets;
+    save('RegretConfuseData.mat','instConfRegret','cumConfRegret');    
+elseif(disturbanceSelect == 3)
+    instSineRegret = modelbasedStateCtrlDiffRegret;
+    cumSineRegret = plotRegrets;
+    save('RegretSineData.mat','instSineRegret','cumSineRegret');    
+end
+
+
+%% Plot the State-Control Difference regret vs time
+Tvec = 0:T;
 figNum = figNum+1;
 figure(figNum);
 set(gcf, 'Position', get(0, 'Screensize'));
@@ -380,6 +423,8 @@ hold on;
 plot(Tvec, plotRegrets, '-.r');
 xlabel('time');
 ylabel('regret');
+xlim([0, T]);
+ylim([0, 3000]);
 hold off;
 legend('$\mathcal{R}(\bar{\pi}^{\dagger}, \pi^{\star}_{2}, T)$', '$\frac{\mathcal{R}(\bar{\pi}^{\dagger}, \pi^{\star}_{2}, T)}{T}$', 'Location','southeast');
 a = findobj(gcf, 'type', 'axes');
@@ -395,55 +440,59 @@ elseif(disturbanceSelect == 3)
     saveas(figure(figNum), [currentFolder 'SinusoidWRegret.png']);
 end
 
-%% Plot the minimax trajectories vs time
-figNum = figNum + 1;
-figure(figNum);
-set(gcf, 'Position', get(0, 'Screensize'));
-plot(tvec, x_minmax(:,:)');
-hold on;
-xlabel('time');
-% ylabel('$x^{\bar{\pi}^{\dagger}}_{k}$', 'interpreter', 'latex');
-ylabel('states');
-hold off;
-a = findobj(gcf, 'type', 'axes');
-h = findobj(gcf, 'type', 'line');
-set(h, 'linewidth', 6);
-set(a, 'linewidth', 6);
-set(a, 'FontSize', 60);
-if(disturbanceSelect == 1)
-    saveas(figure(figNum), [currentFolder 'MACAdverseWStates.png']);
-elseif(disturbanceSelect == 2)
-    saveas(figure(figNum), [currentFolder 'MACConfuseWStates.png']);
-elseif(disturbanceSelect == 3)
-    saveas(figure(figNum), [currentFolder 'MACSinusoidWStates.png']);
-end
-% 
-%% Plot the Hinfty trajectories vs time
-figNum = figNum + 1;
-figure(figNum);
-set(gcf, 'Position', get(0, 'Screensize'));
-plot(tvec, x_hinfty(:,:)');
-hold on;
-xlabel('time');
-% legendText1 = '$x^{\pi^{\star}_{';
-% legendText2 = num2str(modelNum);
-% legendText3 = '}}_{k}$'; 
-% legendText = strcat(legendText1, strcat(legendText2, legendText3)); 
-% ylabel(legendText, 'interpreter', 'latex');
-ylabel('states');
-hold off;
-a = findobj(gcf, 'type', 'axes');
-h = findobj(gcf, 'type', 'line');
-set(h, 'linewidth', 6);
-set(a, 'linewidth', 6);
-set(a, 'FontSize', 60);
-if(disturbanceSelect == 1)
-    saveas(figure(figNum), [currentFolder 'HinfAdverseWStates.png']);
-elseif(disturbanceSelect == 2)
-    saveas(figure(figNum), [currentFolder 'HinfConfuseWStates.png']);
-elseif(disturbanceSelect == 3)
-    saveas(figure(figNum), [currentFolder 'HinfSinusoidWStates.png']);
-end
+% %% Plot the minimax trajectories vs time
+% figNum = figNum + 1;
+% figure(figNum);
+% set(gcf, 'Position', get(0, 'Screensize'));
+% plot(tvec, x_minmax(1,:)');
+% hold on;
+% xlabel('time');
+% % ylabel('$x^{\bar{\pi}^{\dagger}}_{k}$', 'interpreter', 'latex');
+% ylabel('states');
+% xlim([0, T]);
+% ylim([-15, 15]);
+% hold off;
+% a = findobj(gcf, 'type', 'axes');
+% h = findobj(gcf, 'type', 'line');
+% set(h, 'linewidth', 6);
+% set(a, 'linewidth', 6);
+% set(a, 'FontSize', 60);
+% if(disturbanceSelect == 1)
+%     saveas(figure(figNum), [currentFolder 'MACAdverseWStates.png']);
+% elseif(disturbanceSelect == 2)
+%     saveas(figure(figNum), [currentFolder 'MACConfuseWStates.png']);
+% elseif(disturbanceSelect == 3)
+%     saveas(figure(figNum), [currentFolder 'MACSinusoidWStates.png']);
+% end
+% % 
+% %% Plot the Hinfty trajectories vs time
+% figNum = figNum + 1;
+% figure(figNum);
+% set(gcf, 'Position', get(0, 'Screensize'));
+% plot(tvec, x_hinfty(1,:)');
+% hold on;
+% xlabel('time');
+% % legendText1 = '$x^{\pi^{\star}_{';
+% % legendText2 = num2str(modelNum);
+% % legendText3 = '}}_{k}$'; 
+% % legendText = strcat(legendText1, strcat(legendText2, legendText3)); 
+% % ylabel(legendText, 'interpreter', 'latex');
+% ylabel('states');
+% xlim([0, T]);
+% ylim([-15, 15]);
+% hold off;
+% a = findobj(gcf, 'type', 'axes');
+% h = findobj(gcf, 'type', 'line');
+% set(h, 'linewidth', 6);
+% set(a, 'linewidth', 6);
+% set(a, 'FontSize', 60);
+% if(disturbanceSelect == 1)
+%     saveas(figure(figNum), [currentFolder 'HinfAdverseWStates.png']);
+% elseif(disturbanceSelect == 2)
+%     saveas(figure(figNum), [currentFolder 'HinfConfuseWStates.png']);
+% elseif(disturbanceSelect == 3)
+%     saveas(figure(figNum), [currentFolder 'HinfSinusoidWStates.png']);
+% end
 
 % %% Plot the Difference trajectories and difference of control inputs (both Hinfty and Minimax) vs time
 % figNum = figNum + 1;
